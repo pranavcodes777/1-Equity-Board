@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large / legacy database files — only SENSEX30_2000_PRESENT is tracked
+Database/*.csv
+Database/*.xlsx
+Database/SENSEX30_1990_2014*
+Database/SENSEX30_2015_PRESENT*
+Database/SENSEX30_FULL_1990_PRESENT*
+
+# Automation logs (local only)
+Automation/update_log.txt
+Automation/last_run.txt
+
+# OS
+.DS_Store
+Thumbs.db
