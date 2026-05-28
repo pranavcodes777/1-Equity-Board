@@ -17,8 +17,21 @@ st.title("Pranav Equity Dashboard")
 def load_data():
     df = pd.read_parquet("Database/SENSEX30_2000_PRESENT.parquet")
     df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
-    df = df.sort_values(["Equity", "Date"])
-    df["Daily_Return"] = df.groupby("Equity")["Close"].pct_change()
+    df = df.sort_values(["Equity", "Date"]).reset_index(drop=True)
+
+    # Remove zero/negative closes (bad ticks)
+    df = df[df["Close"] > 0].copy()
+
+    # Iteratively remove split/demerger artifacts (>40% single-day moves).
+    # One pass isn't enough — removing a row creates a new gap that produces
+    # another extreme return on the next row, so repeat until stable.
+    for _ in range(10):
+        df["Daily_Return"] = df.groupby("Equity")["Close"].pct_change()
+        mask = df["Daily_Return"].abs() > 0.40
+        if not mask.any():
+            break
+        df = df[~mask].copy()
+
     return df
 
 df = load_data()

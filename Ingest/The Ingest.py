@@ -107,7 +107,7 @@ for equity_name, ticker in stocks.items():
             start=start,
             end="2030-01-01",
             interval="1d",
-            auto_adjust=False,
+            auto_adjust=True,   # split + dividend adjusted prices
             progress=False
         )
 
@@ -121,8 +121,18 @@ for equity_name, ticker in stocks.items():
         # Reset index
         data.reset_index(inplace=True)
 
-        # Keep required columns
-        data = data[["Date", "Open", "High", "Low", "Close", "Volume"]]
+        # Keep required columns (auto_adjust=True has no Adj Close — all cols are adjusted)
+        available = [c for c in ["Date", "Open", "High", "Low", "Close", "Volume"] if c in data.columns]
+        data = data[available]
+
+        # Drop rows with zero or negative close (data artifacts)
+        data = data[data["Close"] > 0]
+
+        # Drop split artifacts — single-day moves > 40% are almost never real
+        data = data.sort_values("Date")
+        data["_ret"] = data["Close"].pct_change().abs()
+        data = data[data["_ret"].isna() | (data["_ret"] < 0.40)]
+        data = data.drop(columns=["_ret"])
 
         # Add Equity column
         data.insert(0, "Equity", equity_name)
