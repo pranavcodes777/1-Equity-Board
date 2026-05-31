@@ -73,7 +73,8 @@ filtered_df = df[
 (
     tab_indexed, tab_dist, tab_corr,
     tab_returns, tab_ma,
-    tab_vol, tab_beta, tab_sharpe
+    tab_vol, tab_beta, tab_sharpe,
+    tab_inr
 ) = st.tabs([
     "Indexed Performance",
     "Return Distribution",
@@ -83,6 +84,7 @@ filtered_df = df[
     "Rolling Volatility",
     "Beta vs NIFTY",
     "Sharpe & Sortino",
+    "INR Correlation",
 ])
 
 # ===================================================
@@ -369,3 +371,85 @@ with tab_sharpe:
         st.caption("Green ≥ 1.5 · Orange 0.5–1.5 · Red < 0.5")
     else:
         st.info("Select equities from the sidebar.")
+
+# ===================================================
+# TAB 9 — INR CORRELATION
+# ===================================================
+with tab_inr:
+    st.subheader("Correlation with Indian Rupee (USD/INR)")
+    st.caption(
+        "Positive correlation → stock tends to rise when INR weakens (USD/INR up). "
+        "IT exporters typically show positive; importers/banks often negative."
+    )
+
+    INR_EQUITY = "Indian Rupee (USD/INR)"
+
+    inr_raw = df[df["Equity"] == INR_EQUITY][["Date", "Daily_Return"]].rename(
+        columns={"Daily_Return": "INR_Return"}
+    ).sort_values("Date")
+
+    inr_raw = inr_raw[
+        (inr_raw["Date"] >= pd.to_datetime(start_date)) &
+        (inr_raw["Date"] <= pd.to_datetime(end_date))
+    ]
+
+    if inr_raw.empty:
+        st.warning(
+            "INR data not found in the parquet. "
+            "Run the ingest script to download it — it will be saved automatically."
+        )
+    else:
+        equities_for_inr = [e for e in selected_equities if e != INR_EQUITY]
+
+        # Static correlation bar chart
+        corr_rows = []
+        for equity in equities_for_inr:
+            eq = filtered_df[filtered_df["Equity"] == equity][["Date", "Daily_Return"]].sort_values("Date")
+            merged = eq.merge(inr_raw, on="Date", how="inner").dropna()
+            if len(merged) < 30:
+                continue
+            corr = merged["Daily_Return"].corr(merged["INR_Return"])
+            corr_rows.append({"Equity": equity, "Correlation": round(corr, 4)})
+
+        if corr_rows:
+            corr_bar = pd.DataFrame(corr_rows).sort_values("Correlation")
+            fig_inr_bar = px.bar(
+                corr_bar,
+                x="Correlation", y="Equity", orientation="h",
+                color="Correlation",
+                color_continuous_scale="RdYlGn",
+                range_color=[-1, 1],
+                title="Correlation of Daily Returns with USD/INR (selected period)",
+            )
+            fig_inr_bar.add_vline(x=0, line_dash="dash", line_color="gray")
+            fig_inr_bar.update_layout(
+                height=max(400, len(corr_rows) * 30 + 100),
+                coloraxis_showscale=False
+            )
+            st.plotly_chart(fig_inr_bar, use_container_width=True)
+
+        # Rolling correlation line chart
+        st.markdown("#### Rolling Correlation with USD/INR")
+        inr_roll_win = st.slider("Window (days)", 30, 252, 90, key="inr_roll_win")
+
+        fig_inr_roll = go.Figure()
+        for equity in equities_for_inr:
+            eq = filtered_df[filtered_df["Equity"] == equity][["Date", "Daily_Return"]].sort_values("Date")
+            merged = eq.merge(inr_raw, on="Date", how="inner").dropna().reset_index(drop=True)
+            if len(merged) < inr_roll_win:
+                st.warning(f"{equity}: not enough overlapping data for {inr_roll_win}-day window.")
+                continue
+            merged["Rolling_Corr"] = (
+                merged["Daily_Return"].rolling(inr_roll_win).corr(merged["INR_Return"])
+            )
+            fig_inr_roll.add_trace(
+                go.Scatter(x=merged["Date"], y=merged["Rolling_Corr"], name=equity, mode="lines")
+            )
+
+        fig_inr_roll.add_hline(y=0, line_dash="dash", line_color="gray")
+        fig_inr_roll.update_layout(
+            title=f"{inr_roll_win}-Day Rolling Correlation with USD/INR",
+            height=600, xaxis_title="Date", yaxis_title="Correlation",
+            yaxis=dict(range=[-1, 1])
+        )
+        st.plotly_chart(fig_inr_roll, use_container_width=True)

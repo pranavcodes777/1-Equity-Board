@@ -42,7 +42,10 @@ stocks = {
 
     # Indices
     "NIFTY 50": "^NSEI",
-    "SENSEX": "^BSESN"
+    "SENSEX": "^BSESN",
+
+    # Currency
+    "Indian Rupee (USD/INR)": "USDINR=X",
 }
 
 DEFAULT_START  = "2000-01-01"
